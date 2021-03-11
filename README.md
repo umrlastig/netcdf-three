@@ -6,12 +6,17 @@ Once the volume is downloaded, it can be uploaded on the GPU as a 3D texture and
 - A volume rendering material that shows either an isosurface or the maximum value reached by each viewing ray through the volume.
 
 This library is built on top of :
-- netcdf.js : to read netcdf v3 files
-- three.js (and OrbitControls): for rendering using WebGL
+- [netcdf.js](https://github.com/cheminfo/netcdfjs) : to read netcdf v3 files
+- [three.js](https://github.com/mrdoob/three.js) : for rendering using WebGL
 
-The demo provided by index.html further uses :
-- WebGL.js : for checking WebGL support 
-- dat.gui : to provide a simple user interface
+![Demo](data/netcdf-three.png)
+
+The [demo](https://www.umr-lastig.fr/netcdf-three/) provided by [index.html](index.html) further uses :
+- [WebGL.js](https://github.com/mrdoob/three.js/blob/master/examples/js/WebGL.js) : for checking WebGL support 
+- [OrbitControls.js](https://github.com/mrdoob/three.js/blob/master/examples/js/controls/OrbitControls.js) : for navigation
+- [dat.gui](https://github.com/dataarts/dat.gui) : to provide a simple user interface
 
 # Limitations
-- not all netcdf files are supported, as netcdfjs only supports v3 files. Other file formats have to be converted first. An extension could be to depend on jsfive, which claims to provide read support for hdf5 files, which is the format of more recent netcdf files (v4), so as to support both v3 files using netcdfjs and v4 files using jsfive.
+- Not all netcdf files are supported, as netcdfjs only supports v3 files. Other file formats have to be converted first. An extension could be to depend on jsfive, which claims to provide read support for hdf5 files, which is the format of more recent netcdf files (v4), so as to support both v3 files using netcdfjs and v4 files using jsfive.
+- Rendering parameters are not tuned automatically to adapt to the volume displayed.
+- This library would benefit from structuring it as a js dependency to be used in larger projects (webpack...)
