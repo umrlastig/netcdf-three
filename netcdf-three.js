@@ -45,30 +45,85 @@ function readNetcdfHeader(response) {
 	});
 }
 
+function getValue(view, offset, type) {
+	switch (type) {
+	case 'byte' : return i => view.getInt8(offset + i, false);
+	// case 'char' : // not supported
+	case 'short' : return i => view.getInt16(offset + i*2, false);
+	case 'int' : return i => view.getInt32(offset + i*4, false);
+	case 'float' : return i => view.getFloat32(offset + i*4, false);
+	case 'double' : return i => view.getFloat64(offset + i*8, false);
+	default : console.error('unsupported type : ',type); return i => 0
+	}
+}
+
+function getGLtype(type) {
+	switch (type) {
+	case 'byte' : return THREE.UnsignedByteType;
+	// case 'char' : // not supported
+	case 'short' : return THREE.FloatType;
+	case 'int' : return THREE.FloatType;
+	case 'float' : return THREE.FloatType;
+	case 'double' : return THREE.FloatType; // no double format
+	default : console.error('unsupported type : ',type); return undefined;
+	}
+}
+
+function getTypedArray(volume) {
+	switch (volume.type) {
+	case 'byte' : return new Uint8Array(volume.size);
+	// case 'char' : // not supported
+	case 'short' : return new Float32Array(volume.size);
+	case 'int' : return new Float32Array(volume.size);
+	case 'float' : return new Float32Array(volume.size);
+	case 'double' : return new Float32Array(volume.size); // no double format
+	default : console.error('unsupported type : ',volume.type); return i => 0
+	}
+}
+
 function decodeVolume(buffer, volume, offset = 0) {
-	volume.data = new Float32Array(volume.size);
-	var view = new DataView(buffer);
-	for(var i = 0; i<volume.size; i++)
-		volume.data[i] = view.getFloat64(offset + i*8, false);
-	volume.min = Math.min.apply(null, volume.data.filter(x => x>1));
-	volume.max = Math.max.apply(null, volume.data);
+	const view = new DataView(buffer);
+	const getVal = getValue(view, offset, volume.type);
+	volume.data = getTypedArray(volume);
+	volume.min = Infinity;
+	volume.max =-Infinity;
+	
+	if(volume.record) {
+		console.warn('decoding of record data is not fully supported yet', volume.record);
+	}
+	
+	for(var i = 0; i<volume.size; i++) {
+		const v = getVal(i);
+		volume.data[i] = v;
+		if(volume.min > v) volume.min = v;
+		if(volume.max < v) volume.max = v;
+	}
 	console.log(volume);
 	return volume;
 }
 
+function getDimension(header, variable, i) {
+	if (i>=variable.dimensions.length) return 1;
+	const dim = variable.dimensions[i];
+	const rec = header.recordDimension;
+	return (dim == rec.id) ? rec.length : header.dimensions[dim].size;
+}
+
 function fetchVolume(header, variableName, forceRangeRequest = false) {
+	if (header.bytesReceived === undefined) header.bytesReceived = header.buffer.byteLength;
 	const rangeRequest = forceRangeRequest || header.acceptRanges;
 	var variable = header.variables.find(val => val.name === variableName);
 	var volume = {
 		'variable': variableName,
-		'xLength': header.dimensions[variable.dimensions[0]].size,
-		'yLength': header.dimensions[variable.dimensions[1]].size,
-		'zLength': header.dimensions[variable.dimensions[2]].size
+		'xLength': getDimension(header,variable,0),
+		'yLength': getDimension(header,variable,1),
+		'zLength': getDimension(header,variable,2),
+		'type' : variable.type,
 	};
+	if (variable.record) volume.record = header.recordDimension;
 	volume.size = volume.xLength * volume.yLength * volume.zLength;
 	const first = variable.offset;
 	const last = first + variable.size - 1;
-
 	// Data is missing and ranges are not accepted
 	if (!rangeRequest && last >= header.bytesReceived)
 	{
@@ -86,7 +141,7 @@ function fetchVolume(header, variableName, forceRangeRequest = false) {
 	if (header.reader) { header.reader.cancel(); header.reader = undefined; }
 
 	if (last < header.bytesReceived)
-		return decodeVolume(header.buffer.buffer, volume, first);
+		return Promise.resolve(decodeVolume(header.buffer.buffer, volume, first));
 	
 	// Data is missing, get it using a range request
 	const headers = new Headers({ Range: `bytes=${first}-${last}` });
@@ -96,7 +151,7 @@ function fetchVolume(header, variableName, forceRangeRequest = false) {
 }
 
 function normalizeVolume(volume) {
-
+	if (getGLtype(volume.type) != THREE.FloatType) return volume;
 	for(var i = 0; i<volume.size; i++)
 		volume.data[i] = Math.min(1,Math.max(0,(volume.data[i]-volume.min)/(volume.max-volume.min)));
 	return volume;
@@ -107,11 +162,12 @@ function createTexture(volume) {
 
 	var texture = new THREE.DataTexture3D( volume.data, volume.zLength, volume.yLength, volume.xLength );
 	texture.format = THREE.RedFormat;
-	texture.type = THREE.FloatType;
+	texture.type = getGLtype(volume.type);
 	texture.minFilter = texture.magFilter = THREE.LinearFilter;
 	texture.unpackAlignment = 1;
+	texture.name = volume.variable;
 	return texture;
-	
+
 }
 
 function createMesh(config, texture) {
@@ -150,7 +206,7 @@ function createMesh(config, texture) {
 		this.updateMatrixWorld();
 		this.material.uniforms[ "u_data" ].value = texture;
 		this.material.uniforms[ "u_size" ].value.set( x, y, z );
-		const STEP_SIZE = 0.5; // should be < 1, lower gets better quality but worst performance
+		const STEP_SIZE = 0.5; // should be < 1, lower gets better quality but worse performance
 		this.material.defines["STEP_SIZE"] = STEP_SIZE;
 		this.material.defines["MAX_STEPS"] = Math.ceil(Math.sqrt(x*x+y*y+z*z)/STEP_SIZE);
 		this.material.defines["REFINEMENT_STEPS"] = 10;

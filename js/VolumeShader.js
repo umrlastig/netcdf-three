@@ -187,11 +187,10 @@ var VolumeRenderShaderIntegrating = {
 		// v_backpos is the back face of the cuboid, so the initial distance calculated in the dot
 		// product below is the distance from near clip plane to the back of the cuboid
 		"				float distance = dot(nearpos - backpos, view_ray);",
-		"               vec3 size_ray = u_size / view_ray;",
-		"               vec3 posi_ray = backpos / view_ray;",
-		"				distance = max(distance, min(0., size_ray.x) - posi_ray.x);",
-		"				distance = max(distance, min(0., size_ray.y) - posi_ray.y);",
-		"				distance = max(distance, min(0., size_ray.z) - posi_ray.z);",
+		"               vec3 distances = min(u_size / view_ray, 0.) - backpos / view_ray;",
+		"				distance = max(distance, distances.x);",
+		"				distance = max(distance, distances.y);",
+		"				distance = max(distance, distances.z);",
 		
 		// Now we have the starting position on the front surface
 		"				vec3 frontpos = backpos  + view_ray * distance ;",

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-	<title>three.js webgl2 - volume rendering example</title>
+	<title>netcdf three.js - volume rendering of netcdf datasets</title>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 	<link type="text/css" rel="stylesheet" href="./main.css">
@@ -10,10 +10,10 @@
 
 <body>
 	<div id="info">
-		<a href="http://threejs.org/" target="_blank" rel="noopener">three.js</a> - Float volume render test (mip / isosurface)
-		<a href="https://cheminfo.github.io/netcdfjs">netcdfjs API</a>
+		<a href="http://threejs.org/" target="_blank" rel="noopener">three.js</a>
+		<a href="https://cheminfo.github.io/netcdfjs">netcdfjs</a>
+		- Volume rendering of netcdf dataset (mip / isosurface)
 	</div>
-
 	<script type="module">
 /*
  * @author mbredif / http://github.com/mbredif
@@ -40,7 +40,9 @@
 			planeMeshZ,
 			samplingMaterial,
 			config,
-			colormaps;
+			colormaps,
+			variables = {},
+			guidim;
 
 		init();
 
@@ -77,7 +79,7 @@
 			var aspect = window.innerWidth / window.innerHeight;
 			camera = new THREE.OrthographicCamera( - h * aspect / 2, h * aspect / 2, h / 2, - h / 2, 1, 1000 );
 			camera.position.set( 64, 64, 64 );
-			camera.up.set( 0, 0, 1 ); // In our data, z is up
+			camera.up.set( 0, 0, 1 ); // z is up
 
 			// Create controls
 			controls = new OrbitControls( camera, renderer.domElement );
@@ -105,12 +107,12 @@
 				colormap: 'viridis',
 				planeX: 0, planeY: 0, planeZ: 0, dimension: "" };
 			var gui = new GUI();
-			var guidim = gui.add( config, 'dimension', [] ).onChange( onDimensionChanged );
-			gui.add( config, 'clim1', 0., 1., 0.001 ).onChange( onConfigChanged );
-			gui.add( config, 'clim2', 0., 1., 0.001 ).onChange( onConfigChanged );
+			guidim = gui.add( config, 'dimension', [] ).onChange( onDimensionChanged );
+			gui.add( config, 'clim1', 0., 1., 0.00001 ).onChange( onConfigChanged );
+			gui.add( config, 'clim2', 0., 1., 0.00001 ).onChange( onConfigChanged );
 			gui.add( config, 'colormap', { gray: 'gray', viridis: 'viridis' } ).onChange( onConfigChanged );
 			gui.add( config, 'renderstyle', { mip: 'mip', iso: 'iso' } ).onChange( onConfigChanged );
-			gui.add( config, 'iso_threshold', 0., 1., 0.001 ).onChange( onConfigChanged );
+			gui.add( config, 'iso_threshold', 0., 1., 0.00001 ).onChange( onConfigChanged );
 			gui.addColor( config, 'iso_ambient_color' ).onChange( onConfigChanged );
 			gui.addColor( config, 'iso_diffuse_color' ).onChange( onConfigChanged );
 			gui.addColor( config, 'iso_specular_color' ).onChange( onConfigChanged );
@@ -135,40 +137,67 @@
 			// Load the data ...
 			fetch('./data/A2003.1.WENO5.002.nc')
 			.then(nc3.readNetcdfHeader)
-			//.then(header => { console.log(header.variables.map(v => v.name).sort()); return header; }) // just for debug
-			.then(header => {
-				const variables = header.variables.filter(v => v.dimensions.length==3); // keep volume variables only
-				const dimensions = variables.map(v => v.name).sort();
-				guidim = guidim.options(dimensions).onChange( onDimensionChanged(header) );
-				guidim.setValue('THT');
-				return header;
-			})
-			.then(header => nc3.fetchVolume(header, config.dimension))
-			.then(nc3.normalizeVolume)
-			.then(nc3.createTexture)
-			.then(texture => {
+			.then(header => loadHeader(header, 'THT'));
+			
+			window.addEventListener( 'resize', onWindowResize, false );
+			document.addEventListener( 'drop', onDrop );
+			document.addEventListener( 'dragover', onDragOver );
+		}
+
+		function loadHeader(header, dim) {
+			// console.log(header); // just for debug
+		    variables = header.variables.filter(v => v.dimensions.length==3); // keep volume variables only
+			const dimensions = variables.map(v => v.name).sort();
+			guidim = guidim.options(dimensions).onChange( onDimensionChanged(header) );
+			guidim.setValue(dim || dimensions[0]); // will trigger onDimensionChanged()
+		}
+		
+		function onDragOver(event) { event.preventDefault(); }
+		function onDrop(event) {
+			event.preventDefault();
+			const files = [];
+			if (event.dataTransfer.items) {
+				for (var i = 0; i < event.dataTransfer.items.length; i++) {
+					if (event.dataTransfer.items[i].kind === 'file')
+						files.push(event.dataTransfer.items[i].getAsFile());
+				}
+			} else {
+				files = event.dataTransfer.files;
+			}
+			if(files.length>1) 
+				console.warn('multiple files have been dropped, showing only one');
+			if(files.length>0) {
+				console.log('loading ' + files[0].name);
+				files[0].arrayBuffer().then(buffer => loadHeader(new netcdfjs(buffer)));
+			}
+		}
+
+		function onDimensionChanged(header) {
+			function updateTexture(texture) {
+				const variable = variables.find(val => val.name === texture.name);
+				if (!variable) {
+					// the decoded variable is no longer present in the main file (eg another file has been loaded), skipping
+					return;
+				}
+				variables.find(val => val.name === texture.name).texture = texture; // cache it
 				mesh.updateTexture(texture);
 				samplingMaterial.updateTexture(texture);
 				updatePlanes(texture);
 				controls.target.set( texture.image.width/ 2, texture.image.height / 2, texture.image.depth / 2 );
-				onConfigChanged()
-			});
-			
-			window.addEventListener( 'resize', onWindowResize, false );
-
-		}
-
-		function onDimensionChanged(header) {
+				onConfigChanged();
+			}
 			return (value) => {
+				const variable = variables.find(val => val.name === value);
+				if (variable.texture) {
+					// use cached texture
+					updateTexture(variable.texture);
+					return;
+				}
 				nc3.fetchVolume(header, value)
 				.then(nc3.normalizeVolume)
 				.then(nc3.createTexture)
-				.then(texture => {
-					mesh.updateTexture(texture);
-					samplingMaterial.updateTexture(texture);
-					updatePlanes(texture);
-					onConfigChanged();
-				})};
+				.then(updateTexture)
+			};
 		}
 
 		function onConfigChanged() {

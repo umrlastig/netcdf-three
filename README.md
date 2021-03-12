@@ -20,3 +20,5 @@ The [demo](https://www.umr-lastig.fr/netcdf-three/) provided by [index.html](ind
 - Not all netcdf files are supported, as netcdfjs only supports v3 files. Other file formats have to be converted first. An extension could be to depend on jsfive, which claims to provide read support for hdf5 files, which is the format of more recent netcdf files (v4), so as to support both v3 files using netcdfjs and v4 files using jsfive.
 - Rendering parameters are not tuned automatically to adapt to the volume displayed.
 - This library would benefit from structuring it as a js dependency to be used in larger projects (webpack...)
+- 'record' variables are not fully supported
+- Only 'float' and 'double' variables have been tested
