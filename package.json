@@ -1,0 +1,35 @@
+{
+  "name": "netcdf_three",
+  "version": "1.0.0",
+  "description": "ThreeJS visualisation of NetCDF datasets",
+  "main": "src/main.js",
+    "exports": {
+    ".": "./dist/netcdf_three.js"
+  },
+  "scripts": {
+    "build": "webpack",
+    "start": "webpack serve --open"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/umrlastig/netcdf-three.git"
+  },
+  "author": "mbredif",
+  "license": "(CECILL-B OR MIT)",
+  "devDependencies": {
+    "webpack": "^5.90.3",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^5.0.2"
+  },
+  "peerDependencies": {
+    "three": "^0.159.0"
+  },
+  "dependencies": {
+    "dat.gui": "^0.7.9",
+    "netcdfjs": "^3.0.0"
+  },
+  "bugs": {
+    "url": "https://github.com/umrlastig/netcdf-three/issues"
+  },
+  "homepage": "https://github.com/umrlastig/netcdf-three#readme"
+}

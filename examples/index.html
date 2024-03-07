@@ -5,25 +5,38 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 	<link type="text/css" rel="stylesheet" href="./main.css">
-	<script src='./js/netcdfjs.min.js'></script>
+	<!-- <script src='./js/netcdfjs.min.js'></script> -->
 </head>
 
 <body>
 	<div id="info">
 		<a href="http://threejs.org/" target="_blank" rel="noopener">three.js</a>
-		<a href="https://cheminfo.github.io/netcdfjs">netcdfjs</a>
 		- Volume rendering of netcdf dataset (mip / isosurface)
 	</div>
-	<script type="module">
+	<script type="importmap">
+	  {
+	    "imports": {
+	      "three": "https://unpkg.com/three@0.159.0/build/three.module.js",
+	      "three/addons/": "https://unpkg.com/three@0.159.0/examples/jsm/"
+	    }
+	  }
+	</script>
+    <script src="../dist/netcdf_three.js"></script>
+    <script>
+    	// netcdfjs
+    	const nc3 = netcdf_three.netcdf_three;
+    </script>
+
+ 	<script type="module">
 /*
  * @author mbredif / http://github.com/mbredif
  */
 
-		import * as THREE from './js/three.js';
-		import { GUI } from './js/dat.gui.js';
-		import { OrbitControls } from './js/OrbitControls.js';
-		import { WEBGL } from './js/WebGL.js';
-		import * as nc3 from './netcdf-three.js';
+		import * as THREE from 'three';
+		import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+		import WebGL from 'three/addons/capabilities/WebGL.js';
+		const WEBGL = WebGL;
+		import { GUI } from './dat.gui.js';
 
 		if ( WEBGL.isWebGL2Available() === false ) {
 			document.body.appendChild( WEBGL.getWebGL2ErrorMessage() );
@@ -125,7 +138,7 @@
 			samplingMaterial = nc3.createSamplingMaterial(config);
 			mesh = nc3.createMesh(config);
 			material = mesh.material;
-			var planeGeom = new THREE.PlaneBufferGeometry( 1, 1 );
+			var planeGeom = new THREE.PlaneGeometry( 1, 1 );
 			planeMeshX = new THREE.Mesh( planeGeom, samplingMaterial );
 			planeMeshY = new THREE.Mesh( planeGeom, samplingMaterial );
 			planeMeshZ = new THREE.Mesh( planeGeom, samplingMaterial );
@@ -135,20 +148,20 @@
 			scene.add(planeMeshZ);
 	
 			// Load the data ...
-			fetch('./data/A2003.1.WENO5.002.nc')
-			.then(nc3.readNetcdfHeader)
-			.then(header => loadHeader(header, 'THT'));
+			fetch('./data/A2003.1.WENO5.002.nc', { method: "GET" })
+				.then(nc3.readNetcdfHeader)
+				.then(header => loadHeader(header, 'THT'));
 			
 			window.addEventListener( 'resize', onWindowResize, false );
 			document.addEventListener( 'drop', onDrop );
 			document.addEventListener( 'dragover', onDragOver );
 		}
 
-		function loadHeader(header, dim) {
+		function loadHeader(reader, dim) {
 			// console.log(header); // just for debug
-		    variables = header.variables.filter(v => v.dimensions.length==3); // keep volume variables only
+		    variables = reader.variables.filter(v => v.dimensions.length==3); // keep volume variables only
 			const dimensions = variables.map(v => v.name).sort();
-			guidim = guidim.options(dimensions).onChange( onDimensionChanged(header) );
+			guidim = guidim.options(dimensions).onChange( onDimensionChanged(reader) );
 			guidim.setValue(dim || dimensions[0]); // will trigger onDimensionChanged()
 		}
 		
@@ -168,11 +181,10 @@
 				console.warn('multiple files have been dropped, showing only one');
 			if(files.length>0) {
 				console.log('loading ' + files[0].name);
-				files[0].arrayBuffer().then(buffer => loadHeader(new netcdfjs(buffer)));
+				files[0].arrayBuffer().then(buffer => loadHeader(nc3.instanceNetcdfReader(buffer)));
 			}
 		}
-
-		function onDimensionChanged(header) {
+		function onDimensionChanged(reader) {
 			function updateTexture(texture) {
 				const variable = variables.find(val => val.name === texture.name);
 				if (!variable) {
@@ -193,7 +205,8 @@
 					updateTexture(variable.texture);
 					return;
 				}
-				nc3.fetchVolume(header, value)
+
+				nc3.fetchVolume(reader, value)
 				.then(nc3.normalizeVolume)
 				.then(nc3.createTexture)
 				.then(updateTexture)
