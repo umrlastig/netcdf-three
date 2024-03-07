@@ -9,9 +9,9 @@ This library is built on top of :
 - [netcdf.js](https://github.com/cheminfo/netcdfjs) : to read netcdf v3 files
 - [three.js](https://github.com/mrdoob/three.js) : for rendering using WebGL
 
-![Demo](data/netcdf-three.png)
+![Demo](examples/data/netcdf-three.png)
 
-The [demo](https://www.umr-lastig.fr/netcdf-three/) provided by [index.html](index.html) further uses :
+The [demo](https://www.umr-lastig.fr/netcdf-three/examples) provided by [examples/index.html](/examples/index.html) further uses :
 - [WebGL.js](https://github.com/mrdoob/three.js/blob/master/examples/js/WebGL.js) : for checking WebGL support 
 - [OrbitControls.js](https://github.com/mrdoob/three.js/blob/master/examples/js/controls/OrbitControls.js) : for navigation
 - [dat.gui](https://github.com/dataarts/dat.gui) : to provide a simple user interface

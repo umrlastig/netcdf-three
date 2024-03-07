@@ -1,12 +1,28 @@
  /*
  * @author mbredif / http://github.com/mbredif
  */
+import * as THREE from "three";
+import { NetCDFReader } from "netcdfjs";
+import { VolumeRenderShaderSampling as SamplingShader } from '../js/VolumeShader';
+import { VolumeRenderShaderIntegrating as IntegratingShader } from '../js/VolumeShader';
 
-import * as THREE from "./js/three.js";
-import { VolumeRenderShaderSampling as SamplingShader } from './js/VolumeShader.js';
-import { VolumeRenderShaderIntegrating as IntegratingShader } from './js/VolumeShader.js';
+function instanceNetcdfReader(arrayBuffer) {
+	return new NetCDFReader(arrayBuffer);
+}
 
-function readNetcdfHeader(response) { 
+function getValue(view, offset, type) {
+	switch (type) {
+	case 'byte' : return i => view.getInt8(offset + i, false);
+	// case 'char' : // not supported
+	case 'short' : return i => view.getInt16(offset + i*2, false);
+	case 'int' : return i => view.getInt32(offset + i*4, false);
+	case 'float' : return i => view.getFloat32(offset + i*4, false);
+	case 'double' : return i => view.getFloat64(offset + i*8, false);
+	default : console.error('unsupported type : ',type); return i => 0
+	}
+}
+
+function readNetcdfHeader(response) {
 	var reader = response.body.getReader();
 	var bytesReceived = 0;
 	var buffer = null;
@@ -25,7 +41,7 @@ function readNetcdfHeader(response) {
 
 		// try reading the header
 		try {
-			const header = new netcdfjs(buffer);
+			const header = new NetCDFReader(buffer);
 			header.url = response.url;
 			header.reader = reader;
 			header.bytesTotal = response.headers.get("Content-Length");
@@ -43,18 +59,6 @@ function readNetcdfHeader(response) {
 			return reader.read().then(process);
 		}
 	});
-}
-
-function getValue(view, offset, type) {
-	switch (type) {
-	case 'byte' : return i => view.getInt8(offset + i, false);
-	// case 'char' : // not supported
-	case 'short' : return i => view.getInt16(offset + i*2, false);
-	case 'int' : return i => view.getInt32(offset + i*4, false);
-	case 'float' : return i => view.getFloat32(offset + i*4, false);
-	case 'double' : return i => view.getFloat64(offset + i*8, false);
-	default : console.error('unsupported type : ',type); return i => 0
-	}
 }
 
 function getGLtype(type) {
@@ -142,7 +146,7 @@ function fetchVolume(header, variableName, forceRangeRequest = false) {
 
 	if (last < header.bytesReceived)
 		return Promise.resolve(decodeVolume(header.buffer.buffer, volume, first));
-	
+
 	// Data is missing, get it using a range request
 	const headers = new Headers({ Range: `bytes=${first}-${last}` });
 	return fetch(header.url, { headers })
@@ -160,19 +164,20 @@ function normalizeVolume(volume) {
 
 function createTexture(volume) {
 
-	var texture = new THREE.DataTexture3D( volume.data, volume.zLength, volume.yLength, volume.xLength );
+	var texture = new THREE.Data3DTexture( volume.data, volume.zLength, volume.yLength, volume.xLength );
 	texture.format = THREE.RedFormat;
 	texture.type = getGLtype(volume.type);
 	texture.minFilter = texture.magFilter = THREE.LinearFilter;
 	texture.unpackAlignment = 1;
 	texture.name = volume.variable;
+	texture.needsUpdate = true;
 	return texture;
 
 }
 
 function createMesh(config, texture) {
 	
-	var geometry = new THREE.BoxBufferGeometry();
+	var geometry = new THREE.BoxGeometry();
 
 	var uniforms = THREE.UniformsUtils.clone( IntegratingShader.uniforms );
 	var material = new THREE.ShaderMaterial( {
@@ -242,4 +247,4 @@ function createSamplingMaterial(config, texture) {
 
 }
 
-export { readNetcdfHeader, fetchVolume, normalizeVolume, createTexture, createMesh, createSamplingMaterial };
+export default { instanceNetcdfReader, readNetcdfHeader, fetchVolume, normalizeVolume, createTexture, createMesh, createSamplingMaterial };
